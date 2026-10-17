@@ -46,6 +46,13 @@
   var DEFAULT_BASE = 'https://api.5dollarfootballapi.com/v1';
   var HOURLY_LIMIT = 60;
 
+  /* 内置密钥：GitHub Pages 这类纯静态托管没有服务端，无法藏 Key，
+     只能写在前面直连上游（已确认上游 Access-Control-Allow-Origin: *，
+     且预检放行 authorization 头）。
+     ⚠️ 仓库是公开的，这个 Key 等同公开。免费层 60 次/小时，被刷就没得用。
+     优先级：设置里手动填的 Key > 内置 Key。 */
+  var BUILTIN_KEY = 'fb_live_UysbtYOJXeexgMMjuGTwxAll7VLlIJAG';
+
   /* 代理基址，动态读取（而非加载时快照）：
      - 本地 node proxy.js 会在 <head> 里服务端注入 window.__FD_PROXY_BASE__="/api"
      - index.html 里的探测脚本在确认存在 /api 代理后也会设置它
@@ -54,7 +61,7 @@
 
   /* ---------------- 配置 ---------------- */
   var config = {
-    key: store.getItem(LS.key) || '',
+    key: store.getItem(LS.key) || BUILTIN_KEY,
     base: proxyBase() || store.getItem(LS.base) || DEFAULT_BASE,
     // 默认 300 秒（12 次/小时）：免费层 60 次/小时，留足余量给详情页点击
     interval: parseInt(store.getItem(LS.interval) || '300', 10),
@@ -63,6 +70,7 @@
 
   function saveConfig(patch) {
     Object.keys(patch).forEach(function (k) { config[k] = patch[k]; });
+    if (!config.key) config.key = BUILTIN_KEY;    // 设置里留空 → 回落到内置 Key，不会把自己搞失效
     if (proxyBase()) config.base = proxyBase();   // 代理模式下不允许改 base
     store.setItem(LS.key, config.key);
     store.setItem(LS.base, config.base);

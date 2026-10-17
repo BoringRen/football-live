@@ -9,3 +9,5 @@ Thumbs.db
 *.log
 
 # 注意：项目里没有任何密钥文件，密钥一律走环境变量（Vercel）或启动参数（本地 proxy.js）
+
+.vercel
