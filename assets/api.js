@@ -508,11 +508,14 @@
 
     fixtures: function (opts) {
       opts = opts || {};
-      // 接口的时间筛选是 start_time / end_time（unix 秒，窗口最大 24 小时）
+      // 接口的时间筛选是 start_time / end_time（unix 秒，窗口最大 24 小时）。
+      // 注意：上游对「超过 24 小时」是硬拒绝（invalid_time_window），
+      // 而 86400 秒是擦线通过，留 5 分钟余量避免边界抖动直接 400。
       var now = Math.floor(Date.now() / 1000);
+      var start = opts.startTime || (now - 6 * 3600);
       var params = {
-        start_time: opts.startTime || (now - 6 * 3600),
-        end_time: opts.endTime || (now + 18 * 3600),
+        start_time: start,
+        end_time: opts.endTime || (start + 86100),
         per_page: 100
       };
       if (opts.leagueId) params.league = opts.leagueId;
