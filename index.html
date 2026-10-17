@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Football Live · 五大联赛实时数据台</title>
+<script>
+  // 代理探测：本地 node proxy.js / Vercel 部署会在服务端提供 /api/* 代理，
+  // 而 GitHub Pages 等纯静态托管没有。这里探测 /api/status 是否存在真实代理：
+  //   返回 200（有代理）→ 设 __FD_PROXY_BASE__，前端走真实数据；
+  //   404 / 网络错误（纯静态）→ 不设，前端自动退回内置演示模式。
+  // 探测只在页面加载时做一次。file:// 双击打开时 fetch 直接失败，也会退回演示。
+  (function () {
+    // 上一次探测已确认有代理 → 本次加载直接同步信任（避免 reload 后再次异步探测）
+    try { if (sessionStorage.getItem('__fd_proxy_ready__') === '1') { window.__FD_PROXY_BASE__ = '/api'; return; } } catch (e) {}
+    if (window.__FD_PROXY_BASE__) return; // 已被 proxy.js 服务端注入，直接信任
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return; // file:// 不探测
+    fetch('/api/status', { method: 'GET', cache: 'no-store' })
+      .then(function (r) {
+        if (r.ok) {
+          window.__FD_PROXY_BASE__ = '/api';
+          // 探测是异步的，而 api.js 会在 DOMContentLoaded 时立即发起首次请求，
+          // 此时可能还没探测完。记下「确有代理」并重载一次，让首次刷新走真实代理；
+          // 重载后靠上面的 __fd_proxy_ready__ 分支同步设值，不会死循环。
+          try {
+            sessionStorage.setItem('__fd_proxy_ready__', '1');
+            location.reload();
+          } catch (e) {}
+        }
+      })
+      .catch(function () { /* 无代理，保持演示模式 */ });
+  })();
+</script>
+<link rel="stylesheet" href="assets/style.css?v=20261017d" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M16 7l7 5-2.6 8.4h-8.8L9 12z" fill="currentColor" opacity=".9"/>
+      <path d="M16 7V3M23 12l3.4-1.6M20.4 20.4l1.8 3.6M11.6 20.4l-1.8 3.6M9 12L5.6 10.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <div class="brand-txt">
+      <strong>Football Live</strong>
+      <span>五大联赛实时数据台</span>
+    </div>
+  </div>
+
+  <div class="topbar-mid">
+    <span id="sourceBadge" class="badge">演示数据</span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+
+  <div class="topbar-actions">
+    <div class="quota" id="quota" title="免费层每小时 60 次请求">
+      <div class="quota-bar"><i id="quotaFill"></i></div>
+      <span id="quotaText">配额 60/60</span>
+    </div>
+    <button class="btn" id="btnRefresh">刷新</button>
+    <button class="btn btn-ghost" id="btnSettings">设置</button>
+  </div>
+</header>
+
+<div class="subbar">
+  <nav class="tabs" id="tabs">
+    <button class="tab is-active" data-view="matches">实时赛事</button>
+    <button class="tab" data-view="standings">积分榜</button>
+    <button class="tab" data-view="odds">赔率变动</button>
+  </nav>
+  <div class="refresh-hint">
+    <span class="dot-live" id="tickDot"></span>
+    <span id="nextTick">--</span>s 后自动刷新
+  </div>
+</div>
+
+<main>
+  <section class="view is-active" id="view-matches">
+    <div class="filters">
+      <div class="chips" id="leagueChips"></div>
+      <div class="segmented" id="statusSeg">
+        <button data-status="all" class="is-active">全部</button>
+        <button data-status="live">进行中</button>
+        <button data-status="upcoming">未开始</button>
+        <button data-status="finished">已结束</button>
+      </div>
+    </div>
+    <div id="matchesWrap">
+      <div class="match-grid" id="matchGrid"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-standings">
+    <div class="filters">
+      <div class="chips" id="slChips"></div>
+      <div class="segmented" id="stType">
+        <button data-type="points" class="is-active">积分榜</button>
+        <button data-type="corner">角球榜</button>
+        <button data-type="card">红黄牌榜</button>
+      </div>
+    </div>
+    <div id="standingsWrap"></div>
+  </section>
+
+  <section class="view" id="view-odds">
+    <div class="section-intro">
+      <h2>1X2 赔率变动监控</h2>
+      <p>对比开赔与当前即时赔率，按变动幅度排序。数值为小数赔率（decimal）。</p>
+    </div>
+    <div id="oddsWrap"></div>
+  </section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div id="drawerTitle" class="drawer-title">比赛详情</div>
+    <button class="icon-btn" id="btnCloseDrawer" aria-label="关闭">
+      <svg viewBox="0 0 20 20" width="18" height="18"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>数据源设置</h3>
+      <button class="icon-btn" id="btnCloseModal" aria-label="关闭">
+        <svg viewBox="0 0 20 20" width="18" height="18"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <label class="field">
+        <span>API Key（5DollarFootballAPI）</span>
+        <input id="inpKey" type="text" placeholder="fb_xxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+        <em>留空则使用内置演示数据。免费层仅覆盖欧洲五大联赛，60 次/小时。</em>
+      </label>
+      <label class="field">
+        <span>API Base URL</span>
+        <input id="inpBase" type="text" value="https://api.5dollarfootballapi.com/v1" spellcheck="false" />
+        <em>CORS 被拦截时，填入你自建的反向代理地址。</em>
+      </label>
+      <label class="field">
+        <span>自动刷新间隔</span>
+        <select id="inpInterval">
+          <option value="30">30 秒（约 120 次/小时，会超额）</option>
+          <option value="60">60 秒（贴着免费额度上限）</option>
+          <option value="120">2 分钟（约 30 次/小时）</option>
+          <option value="300" selected>5 分钟（推荐，约 12 次/小时）</option>
+        </select>
+      </label>
+      <label class="field-inline">
+        <input id="inpAuto" type="checkbox" checked />
+        <span>开启自动刷新</span>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="btnReset">恢复默认</button>
+      <button class="btn" id="btnSave">保存并连接</button>
+    </div>
+  </div>
+</div>
+
+<footer class="site-foot">
+  <span>Football data by <a href="https://5dollarfootballapi.com" target="_blank" rel="noopener">5DollarFootballAPI</a></span>
+  <span class="sep">·</span>
+  <span>本页所有数据均为只读展示，仅供技术演示</span>
+</footer>
+
+<script src="assets/mock.js?v=20261017d"></script>
+<script src="assets/api.js?v=20261017d"></script>
+<script src="assets/ui.js?v=20261017d"></script>
+</body>
+</html>
